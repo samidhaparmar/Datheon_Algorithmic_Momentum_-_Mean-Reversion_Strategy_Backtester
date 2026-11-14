@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "datheon-backtester"
+version = "0.1.0"
+description = "Reproducible equity data preparation for momentum and mean-reversion research"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy>=1.23.5,<3",
+  "pandas>=2.0,<3",
+  "pyarrow>=12",
+  "requests>=2.31",
+  "statsmodels>=0.14",
+  "yfinance>=0.2.40",
+  "lxml>=5",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+datheon-ingest = "datheon_data.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
