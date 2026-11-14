@@ -1,5 +1,6 @@
 import importlib.util
 import unittest
+from pathlib import Path
 
 
 @unittest.skipUnless(importlib.util.find_spec("streamlit"), "dashboard extra not installed")
@@ -7,7 +8,8 @@ class DashboardAppTests(unittest.TestCase):
     def test_synthetic_demo_runs_without_vendor_access(self):
         from streamlit.testing.v1 import AppTest
 
-        app = AppTest.from_file("app.py").run(timeout=30)
+        app_path = Path(__file__).resolve().parents[1] / "app.py"
+        app = AppTest.from_file(str(app_path)).run(timeout=30)
         self.assertFalse(app.exception)
         app.button[0].click().run(timeout=120)
         self.assertFalse(app.exception)
