@@ -1,6 +1,6 @@
 # Datheon Algorithmic Momentum & Mean-Reversion Backtester
 
-An incremental research project for equity market data, strategy signals, execution simulation, and risk analytics. **Task 1 is implemented here:** a reproducible daily/hourly OHLCV ingestion and sanitation pipeline. Later milestones will build on its adjusted price and return schema.
+An incremental research project for equity market data, strategy signals, execution simulation, and risk analytics. **Tasks 1 and 2 are implemented:** a reproducible OHLCV preparation pipeline and causal momentum/mean-reversion signal generation. Execution simulation and risk analytics are later milestones.
 
 ## Task 1: historical market data
 
@@ -52,6 +52,31 @@ Each `data/processed/<frequency>/<symbol>.parquet` file has a UTC `timestamp` in
 
 `data/processed/manifest.json` lists the request window, requested universe, each file's coverage and row count, ADF statistic and p-value, and any errors. `stationary_at_5pct` means the ADF unit-root null was rejected at 5%; it does not prove stationarity. Short or nearly constant series are reported as untestable.
 
+## Task 2: causal strategy signals
+
+Generate decision-time signals from Task 1 output:
+
+```bash
+datheon-signals --input data/processed --output data/signals
+
+# Experiment with a different set of lookbacks and band width.
+datheon-signals --ma-fast 10 --ma-slow 40 --bb-window 20 --bb-width 2.5
+```
+
+The command reads `daily/*.parquet` and `hourly/*.parquet`, writes matching files under `data/signals`, and records parameters, readiness counts, and a SHA-256 hash of each input in `data/signals/manifest.json`.
+
+Each output row is a **decision for bar `t`**. Its `information_cutoff` is the preceding observed bar, and `known_adjusted_close` is that bar's adjusted close. All indicator and position columns derive from this lagged series. A crossover caused by the close of bar `t-1` first appears on decision row `t`. Warmup rows are flat and marked as unready.
+
+| Signal | Rule |
+| --- | --- |
+| MACD | EMA(12) minus EMA(26), with a 9-bar EMA signal line. `macd_cross` is +1 or -1 at an upward or downward signal-line crossing. |
+| Dual moving averages | SMA(20) and SMA(50). `ma_cross` is +1 or -1 at an upward or downward crossing. |
+| Momentum target | `momentum_position` is +1 when both MACD and MA spreads are positive, -1 when both are negative, and 0 when they disagree. |
+| Dynamic Bollinger Bands | A 20-bar mean ± rolling price standard deviation times `bb_width`. The width is scaled by the ratio of 10-bar to 60-bar log-return volatility, clipped to 0.75–1.50. |
+| Mean reversion target | Enter long below the lower band or short above the upper band. Exit at the midline. `mean_reversion_action` records entries and exits; `mean_reversion_position` is +1, -1, or 0. |
+
+These are **target exposures**, not executed trades or realized P&L. The execution simulator in Task 3 will determine fill timing and costs. The indicators use row-count windows, so a gap in market data is not filled with synthetic observations. Lookbacks and band parameters are configurable via `datheon-signals --help`.
+
 ## Research cautions
 
 - `--sp500-current` fetches today's constituents, which introduces survivorship bias into a historical backtest. Supply a historical, point-in-time universe for credible strategy results.
@@ -72,3 +97,5 @@ The tests use synthetic bars and mocked provider responses. They do not require 
 - [yfinance price-history reference](https://ranaroussi.github.io/yfinance/reference/yfinance.price_history.html)
 - [Alpha Vantage API documentation](https://www.alphavantage.co/documentation/)
 - [statsmodels ADF documentation](https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.adfuller.html)
+- [pandas exponentially weighted windows](https://pandas.pydata.org/pandas-docs/stable/generated/pandas.Series.ewm.html)
+- [pandas rolling standard deviation](https://pandas.pydata.org/docs/reference/api/pandas.api.typing.Rolling.std.html)
