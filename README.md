@@ -1,6 +1,6 @@
 # Datheon Algorithmic Momentum & Mean-Reversion Backtester
 
-An incremental research project for equity market data, strategy signals, execution simulation, and risk analytics. **Tasks 1–3 are implemented:** OHLCV preparation, causal momentum/mean-reversion signals, and cost-aware execution and risk simulation. The interactive dashboard and risk whitepaper are the remaining milestone.
+An incremental research project for equity market data, strategy signals, execution simulation, and risk analytics. **All four coding milestones are implemented:** OHLCV preparation, causal strategy signals, cost-aware execution and risk simulation, and an interactive research dashboard with PDF reports. The dashboard is ready to host on Streamlit Community Cloud; a hosted app URL requires a Streamlit account connection.
 
 ## Task 1: historical market data
 
@@ -103,6 +103,32 @@ Sharpe divides mean excess bar return by its sample standard deviation and multi
 
 Monte Carlo uses a seeded **circular moving-block bootstrap** of observed *net* strategy returns (default 1,000 paths, five-bar blocks, and a horizon matching the backtest). `probability_of_ruin` is the fraction of sampled paths that ever reach or fall below `ruin_fraction × initial_capital` (default 50%). It is conditional on the backtest return history and model assumptions, **not a forward probability forecast**. The manifest and report record the seed and all inputs for reproducibility.
 
+## Task 4: interactive dashboard and reports
+
+The [Streamlit dashboard](app.py) accepts custom tickers, inclusive start/end dates, daily or hourly bars, a benchmark ticker, strategy choice, and execution assumptions. It supports Yahoo Finance and Alpha Vantage, plus an explicitly labeled synthetic demo that runs without external data access. It plots cumulative total return against normalized buy-and-hold, rolling drawdowns, cost-aware risk metrics, and a bootstrap ruin summary. Users can download an equity curve, JSON risk report, and PDF performance tearsheet.
+
+Parameter search uses a small grid of moving-average windows or Bollinger window/width settings. It ranks candidates **only on the earlier 70% training segment** using net Sharpe; the selected candidate is then evaluated on the later 30% holdout. The dashboard displays both results and the selected parameters. Repeated manual tuning to the holdout would weaken its value as an independent check.
+
+```bash
+pip install -e '.[dashboard]'
+streamlit run app.py
+```
+
+For Streamlit Community Cloud, connect this GitHub repository, choose `main` and `app.py`, and use Python 3.11 or newer. The root [requirements.txt](requirements.txt) installs the package and dashboard dependencies. Set `ALPHAVANTAGE_API_KEY` as a deployment secret or environment variable only if using the Alpha Vantage source. Do not commit keys. The live providers can be rate limited or require a paid entitlement; the synthetic demo is available for portfolio review without these services.
+
+Published report artifacts:
+
+- [Risk methodology whitepaper](docs/risk_whitepaper.pdf) and its [editable source](docs/risk_whitepaper.md).
+- [Example performance tearsheet](docs/sample_tearsheet.pdf) and [machine-readable report](docs/sample_tearsheet.json). **The example is synthetic, not historical market performance.**
+
+To regenerate the two PDFs and example JSON from code:
+
+```bash
+python scripts/build_reports.py
+```
+
+The report generator uses ReportLab. The whitepaper describes data lineage, signal timing, execution assumptions, risk formulas, bootstrap interpretation, validation checks, and remaining model risks. The example tearsheet is a one-page visual demonstration with its simulated status prominent on the page.
+
 ## Research cautions
 
 - `--sp500-current` fetches today's constituents, which introduces survivorship bias into a historical backtest. Supply a historical, point-in-time universe for credible strategy results.
@@ -128,3 +154,4 @@ The tests use synthetic bars and mocked provider responses. They do not require 
 - [pandas rolling standard deviation](https://pandas.pydata.org/docs/reference/api/pandas.api.typing.Rolling.std.html)
 - [William Sharpe, *The Sharpe Ratio*](https://web.stanford.edu/~wfsharpe/art/sr/sr.htm)
 - [Tóth et al., *Anomalous Price Impact and the Critical Nature of Liquidity in Financial Markets*](https://journals.aps.org/prx/abstract/10.1103/PhysRevX.1.021006)
+- [Streamlit Community Cloud dependency and deployment guide](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies)
