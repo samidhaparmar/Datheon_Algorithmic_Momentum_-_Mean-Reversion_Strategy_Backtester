@@ -8,6 +8,8 @@ The CLI downloads one or many equities, checks timestamp uniqueness and OHLCV in
 
 **Provider capabilities:** Yahoo Finance supplies up to ten years of daily data, but its hourly history is limited to roughly the most recent 60 days. For ten years of hourly data, use the Alpha Vantage historical intraday endpoint with a premium API entitlement. Its `month` parameter is requested for every month in the range; a ten-year run is roughly 120 requests per symbol. Alpha Vantage's adjusted daily endpoint is also premium. This repository does not contain downloaded market data or an API key.
 
+Completed historical Alpha Vantage months are cached under `data/raw-cache/alpha` so a long run can resume without downloading the same months again. Current-month and daily requests remain uncached.
+
 ## Setup
 
 ```bash

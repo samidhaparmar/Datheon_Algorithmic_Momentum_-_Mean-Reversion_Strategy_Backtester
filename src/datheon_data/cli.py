@@ -59,15 +59,17 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError("Yahoo hourly history is limited to approximately 60 days; use Alpha Vantage for a longer range")
     needs_alpha = ("hourly" in frequencies and args.hourly_provider == "alpha") or (
         "daily" in frequencies and args.daily_provider == "alpha")
-    alpha = AlphaVantage(os.getenv("ALPHAVANTAGE_API_KEY", ""), args.alpha_pause) if needs_alpha else None
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
+    alpha = AlphaVantage(os.getenv("ALPHAVANTAGE_API_KEY", ""), args.alpha_pause,
+                         cache_dir=out.parent / "raw-cache" / "alpha") if needs_alpha else None
     manifest: dict[str, object] = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "start_inclusive_utc": start.isoformat(), "end_exclusive_utc": end.isoformat(),
         "universe_source": "current_sp500" if args.sp500_current else "csv" if args.universe_csv else "explicit_symbols",
         "survivorship_warning": "Current S&P 500 membership is not point-in-time historical membership" if args.sp500_current else None,
         "symbols_requested": symbols, "results": [],
+        "alpha_historical_month_cache": str(out.parent / "raw-cache" / "alpha") if needs_alpha else None,
     }
     failures = 0
     for frequency in frequencies:

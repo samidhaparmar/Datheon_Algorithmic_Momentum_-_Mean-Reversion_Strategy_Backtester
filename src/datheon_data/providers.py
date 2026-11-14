@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import time
+import hashlib
+import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -41,20 +44,37 @@ class AlphaVantage:
 
     url = "https://www.alphavantage.co/query"
 
-    def __init__(self, api_key: str, pause_seconds: float = 0.0, session: requests.Session | None = None):
+    def __init__(self, api_key: str, pause_seconds: float = 0.0,
+                 session: requests.Session | None = None, cache_dir: Path | None = None):
         if not api_key:
             raise ValueError("ALPHAVANTAGE_API_KEY is required")
         self.api_key = api_key
         self.pause_seconds = pause_seconds
         self.session = session or requests.Session()
+        self.cache_dir = cache_dir
 
     def _request(self, params: dict[str, str]) -> dict[str, Any]:
+        # Historical months are immutable enough to cache for long-running jobs.
+        # The current month and daily endpoint remain fresh on each run.
+        month = params.get("month")
+        cacheable = bool(month and month < datetime.utcnow().strftime("%Y-%m"))
+        cache_path = None
+        if cacheable and self.cache_dir is not None:
+            digest = hashlib.sha256(json.dumps(params, sort_keys=True).encode()).hexdigest()
+            cache_path = self.cache_dir / f"{digest}.json"
+            if cache_path.exists():
+                return json.loads(cache_path.read_text(encoding="utf-8"))
         response = self.session.get(self.url, params={**params, "apikey": self.api_key}, timeout=45)
         response.raise_for_status()
         payload = response.json()
         for key in ("Error Message", "Note", "Information"):
             if key in payload:
                 raise ProviderError(f"Alpha Vantage: {payload[key]}")
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = cache_path.with_suffix(".json.tmp")
+            temporary.write_text(json.dumps(payload), encoding="utf-8")
+            temporary.replace(cache_path)
         if self.pause_seconds:
             time.sleep(self.pause_seconds)
         return payload
