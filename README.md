@@ -1,6 +1,6 @@
 # Datheon Algorithmic Momentum & Mean-Reversion Backtester
 
-An incremental research project for equity market data, strategy signals, execution simulation, and risk analytics. **Tasks 1 and 2 are implemented:** a reproducible OHLCV preparation pipeline and causal momentum/mean-reversion signal generation. Execution simulation and risk analytics are later milestones.
+An incremental research project for equity market data, strategy signals, execution simulation, and risk analytics. **Tasks 1–3 are implemented:** OHLCV preparation, causal momentum/mean-reversion signals, and cost-aware execution and risk simulation. The interactive dashboard and risk whitepaper are the remaining milestone.
 
 ## Task 1: historical market data
 
@@ -77,12 +77,39 @@ Each output row is a **decision for bar `t`**. Its `information_cutoff` is the p
 
 These are **target exposures**, not executed trades or realized P&L. The execution simulator in Task 3 will determine fill timing and costs. The indicators use row-count windows, so a gap in market data is not filled with synthetic observations. Lookbacks and band parameters are configurable via `datheon-signals --help`.
 
+## Task 3: execution and risk analytics
+
+```bash
+datheon-backtest --bars data/processed --signals data/signals --output data/backtests
+
+# Illustrative sensitivity run with narrower participation and a larger spread.
+datheon-backtest --strategy momentum --max-participation 0.02 \
+  --half-spread-bps 5 --mc-paths 2000 --ruin-fraction 0.5
+```
+
+The simulator trades changes in the Task 2 target state at the **next bar's open** and marks equity at that bar's close. It uses only the **previous bar's volume** to cap each fill (`max_participation` defaults to 5%) and calculate impact. Unfilled shares remain pending; unchanged targets do not cause repeated rebalancing. It verifies both the signal's `information_cutoff` and its lagged price against the bar file. When a Task 2 manifest exists, it also checks the source file hash to reject stale signals.
+
+For an order of `Q` shares and preceding-bar volume `V`, participation is `|Q| / V`. The fill price is the adjusted open plus or minus a configurable half spread and two impact terms: `linear_impact_bps × participation` and `sqrt_impact_bps × sqrt(participation)`. The side determines the sign. Per-share commissions with a minimum charge are deducted for each fill. Short inventory pays a configurable annual borrow rate per bar. Defaults are research assumptions, **not calibrated broker quotes or promises of executable liquidity**. The adjusted OHLC series is a synthetic total-return price basis; dividends and splits are already embedded and are not credited again. Actual raw quotes, intraday order books, margin requirements, and borrow availability are outside this model. A short gap that exhausts capital ends the simulation at zero equity.
+
+Outputs for each symbol, frequency, and strategy are:
+
+| File | Contents |
+| --- | --- |
+| `equity_curve.parquet` | Targets, actual shares, partial fills, participation, spread/impact/commission/borrow costs, equity, net returns, and drawdown. |
+| `risk_report.json` | Annualized Sharpe, Sortino, and Calmar ratios; total return; maximum drawdown; maximum drawdown duration in bars; cost totals; Monte Carlo summary; input hashes and parameters. |
+| `monte_carlo.parquet` | Pointwise 5th/50th/95th percentile equity curves and up to ten sample paths. |
+
+Sharpe divides mean excess bar return by its sample standard deviation and multiplies by the square root of bars per year. Sortino uses the root mean square of negative excess returns. Calmar divides annualized compounded return by maximum drawdown magnitude. The default annualization is 252 bars for daily data and 252 × 6.5 for hourly data; override with `--periods-per-year` if the data's session structure differs. Ratios with a zero denominator are null.
+
+Monte Carlo uses a seeded **circular moving-block bootstrap** of observed *net* strategy returns (default 1,000 paths, five-bar blocks, and a horizon matching the backtest). `probability_of_ruin` is the fraction of sampled paths that ever reach or fall below `ruin_fraction × initial_capital` (default 50%). It is conditional on the backtest return history and model assumptions, **not a forward probability forecast**. The manifest and report record the seed and all inputs for reproducibility.
+
 ## Research cautions
 
 - `--sp500-current` fetches today's constituents, which introduces survivorship bias into a historical backtest. Supply a historical, point-in-time universe for credible strategy results.
 - The adjusted-close ratio is the provider's historical adjustment convention. Adjusted OHLC is suitable for total-return research, but the adjusted price is not an executable quote. Later execution simulations should distinguish signal prices from actual fills.
 - Dividend and split events are retained for inspection. Alpha Vantage's intraday response does not include event columns; null does not mean no event occurred.
 - Provider availability, revisions, ticker changes, delistings, rate limits, and corporate actions can change the result. The manifest records what was actually retrieved; it never labels a short series as ten years of coverage.
+- Execution cost coefficients should be stress-tested or calibrated to venue, ticker, and order size. A single-symbol backtest is not a diversified portfolio backtest.
 
 ## Tests
 
@@ -99,3 +126,5 @@ The tests use synthetic bars and mocked provider responses. They do not require 
 - [statsmodels ADF documentation](https://www.statsmodels.org/stable/generated/statsmodels.tsa.stattools.adfuller.html)
 - [pandas exponentially weighted windows](https://pandas.pydata.org/pandas-docs/stable/generated/pandas.Series.ewm.html)
 - [pandas rolling standard deviation](https://pandas.pydata.org/docs/reference/api/pandas.api.typing.Rolling.std.html)
+- [William Sharpe, *The Sharpe Ratio*](https://web.stanford.edu/~wfsharpe/art/sr/sr.htm)
+- [Tóth et al., *Anomalous Price Impact and the Critical Nature of Liquidity in Financial Markets*](https://journals.aps.org/prx/abstract/10.1103/PhysRevX.1.021006)

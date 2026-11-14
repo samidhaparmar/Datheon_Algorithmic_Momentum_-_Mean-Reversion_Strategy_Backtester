@@ -24,6 +24,7 @@ test = ["pytest>=8"]
 [project.scripts]
 datheon-ingest = "datheon_data.cli:main"
 datheon-signals = "datheon_data.signal_cli:main"
+datheon-backtest = "datheon_data.backtest_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
